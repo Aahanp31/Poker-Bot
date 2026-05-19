@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# C++ build artifacts
+build/
+*.so
+*.dylib
+
+# Training data and model weights
+data/
+*.npz
+*.pt
+*.pth
+
+# macOS
+.DS_Store
+
+# Env / secrets
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
