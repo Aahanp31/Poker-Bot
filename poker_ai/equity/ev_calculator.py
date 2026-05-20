@@ -72,6 +72,12 @@ PREFLOP_ODDS = {
 }
 
 
+# This function looks up preflop equity for a two-card starting hand.
+# Parameters:
+#   - card1: first hole Card
+#   - card2: second hole Card
+# Returns:
+#   - float: equity vs one random opponent (0.0 if hand not in table)
 def get_preflop_odds(card1, card2):
     high   = max(card1.rank, card2.rank)
     low    = min(card1.rank, card2.rank)
@@ -79,9 +85,22 @@ def get_preflop_odds(card1, card2):
     return PREFLOP_ODDS.get((high, low, suited), 0.0)
 
 
+# This function calculates the pot odds for a given call.
+# Parameters:
+#   - call_amount: chips required to call
+#   - pot_size: current pot before the call
+# Returns:
+#   - float: fraction of final pot that the call represents
 def pot_odds(call_amount, pot_size):
     return call_amount / (pot_size + call_amount)
 
 
+# This function calculates the expected value of calling a bet.
+# Parameters:
+#   - equity: probability of winning the pot (0.0 to 1.0)
+#   - pot: current pot size
+#   - call_amount: chips required to call
+# Returns:
+#   - float: expected chip gain. Positive means calling is profitable.
 def ev(equity, pot, call_amount):
     return equity * pot - (1 - equity) * call_amount

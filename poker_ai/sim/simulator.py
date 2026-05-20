@@ -6,24 +6,30 @@ from poker_ai.core.hand_evaluator import evaluate
 from poker_ai.equity.ev_calculator import get_preflop_odds, pot_odds, ev
 
 
+# This class runs complete Texas Hold'em hands from deal to showdown. It handles blinds,
+# multi-street betting rounds, and chip transfers using simple EV-based decision logic.
 class Simulator:
+
     def __init__(self, players, big_blind, small_blind=None):
-        self.big_blind  = big_blind
+        self.big_blind   = big_blind
         self.small_blind = small_blind if small_blind is not None else big_blind >> 1
-        self.gamestate  = Gamestate(big_blind, self.small_blind)
-        self.deck       = Deck()
+        self.gamestate   = Gamestate(big_blind, self.small_blind)
+        self.deck        = Deck()
 
         for player in players:
             self.gamestate.add_player(player)
 
+    # This method runs a single complete hand from shuffle to pot award.
+    # Returns:
+    #   - dict: {'winner': str, 'pot': int, 'method': 'fold' | 'showdown'}
     def simulate_hand(self):
-        gs  = self.gamestate
+        gs   = self.gamestate
         deck = self.deck
         num  = len(gs.players)
 
         gs.reset_round()
         deck.reset()
-        gs.advance_street()   # preflop
+        gs.advance_street()  # preflop
         gs.post_blinds()
         gs.deal_hands(deck)
 
@@ -81,8 +87,8 @@ class Simulator:
             elif action == 'raise':
                 call_amt  = gs.current_bet - p.current_bet
                 raise_amt = call_amt + self.big_blind
-                amount        = p.bet_raise(raise_amt, gs)
-                gs.pot       += amount
+                amount         = p.bet_raise(raise_amt, gs)
+                gs.pot        += amount
                 gs.current_bet = p.current_bet
                 players_to_act = {
                     j for j, q in enumerate(gs.players)
@@ -99,6 +105,11 @@ class Simulator:
 
             gs.player_index = (i + 1) % num
 
+    # This method selects an action for the given player using pot odds and preflop equity.
+    # Parameters:
+    #   - player: the acting Player
+    # Returns:
+    #   - str: 'fold', 'call', 'raise', or 'check'
     def _decide_action(self, player):
         gs      = self.gamestate
         to_call = gs.current_bet - player.current_bet
@@ -106,9 +117,9 @@ class Simulator:
         if to_call <= 0:
             return random.choice(['check', 'raise'])
 
-        equity    = get_preflop_odds(player.hand[0], player.hand[1])
-        call_ev   = ev(equity, gs.pot, to_call)
-        pot_odd   = pot_odds(to_call, gs.pot)
+        equity  = get_preflop_odds(player.hand[0], player.hand[1])
+        call_ev = ev(equity, gs.pot, to_call)
+        pot_odd = pot_odds(to_call, gs.pot)
 
         if call_ev > 0:
             return random.choice(['call', 'raise'])
@@ -132,12 +143,16 @@ class Simulator:
     def _showdown(self):
         gs     = self.gamestate
         active = gs.active_players()
-
-        winner    = min(active, key=lambda p: evaluate(p.hand, gs.board))
+        winner = min(active, key=lambda p: evaluate(p.hand, gs.board))
         winner.stack += gs.pot
         result = {'winner': winner.name, 'pot': gs.pot, 'method': 'showdown'}
         gs.pot = 0
         return result
 
+    # This method simulates num_hands complete hands and returns all results.
+    # Parameters:
+    #   - num_hands: number of hands to play
+    # Returns:
+    #   - list[dict]: result dict from each hand
     def run(self, num_hands):
         return [self.simulate_hand() for _ in range(num_hands)]

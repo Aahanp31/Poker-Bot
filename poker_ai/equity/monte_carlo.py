@@ -1,9 +1,14 @@
 from poker_ai.mc_cpp import monte_carlo as _run
 
+
 def _to_int(card):
     return (card.rank - 2) * 4 + card.suit
 
+
+# This class wraps the C++ Monte Carlo engine to estimate hand equity by simulation.
+# It converts Card objects to integer encoding and delegates all computation to mc_cpp.
 class MonteCarlo:
+
     def __init__(self, hole_cards, board, num_opponents):
         self.hole_cards    = hole_cards
         self.board         = board
@@ -11,6 +16,11 @@ class MonteCarlo:
         self._hole         = [_to_int(c) for c in hole_cards]
         self._board        = [_to_int(c) for c in board]
 
+    # This method runs Monte Carlo simulations and returns the equity breakdown.
+    # Parameters:
+    #   - num_sims: number of random runouts to simulate (default 10000)
+    # Returns:
+    #   - dict: {'win': float, 'tie': float, 'loss': float} as fractions of simulations
     def simulate(self, num_sims=10000):
         return _run(self._hole, self._board, self.num_opponents, num_sims)
 

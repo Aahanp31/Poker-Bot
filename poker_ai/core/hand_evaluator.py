@@ -7,8 +7,7 @@ _evaluator = _TreysEvaluator()
 
 _SUIT_MAP = {0: 'h', 1: 'd', 2: 'c', 3: 's'}
 
-# Precomputed lookup: our card int (rank*4+suit, rank 0-based) -> treys int
-# Avoids string formatting on every evaluation call
+# Precomputed (rank, suit) -> treys int. Avoids string formatting on every call.
 _TO_TREYS = {
     (r, s): _TreysCard.new(f'{RANK_NAMES[r]}{_SUIT_MAP[s]}')
     for r in RANKS
@@ -16,29 +15,54 @@ _TO_TREYS = {
 }
 
 HAND_NAMES = {
-    0: 'High Card',     1: 'One Pair',      2: 'Two Pair',
-    3: 'Three of a Kind', 4: 'Straight',    5: 'Flush',
-    6: 'Full House',    7: 'Four of a Kind', 8: 'Straight Flush',
+    0: 'High Card',       1: 'One Pair',        2: 'Two Pair',
+    3: 'Three of a Kind', 4: 'Straight',         5: 'Flush',
+    6: 'Full House',      7: 'Four of a Kind',   8: 'Straight Flush',
     9: 'Royal Flush',
 }
 
 _TREYS_TO_RANK = {0: 9, 1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1, 9: 0}
 
 
+# This function evaluates a hand using the treys library.
+# Parameters:
+#   - hole_cards: list of 2 Card objects
+#   - board: list of 3-5 Card objects
+# Returns:
+#   - int: treys score (lower is better)
 def evaluate(hole_cards, board):
     t_hand  = [_TO_TREYS[(c.rank, c.suit)] for c in hole_cards]
     t_board = [_TO_TREYS[(c.rank, c.suit)] for c in board]
     return _evaluator.evaluate(t_board, t_hand)
 
 
+# This function returns the hand class on a 0-9 scale.
+# Parameters:
+#   - hole_cards: list of 2 Card objects
+#   - board: list of 3-5 Card objects
+# Returns:
+#   - int: 0=High Card .. 9=Royal Flush
 def get_hand_rank(hole_cards, board):
     return _TREYS_TO_RANK[_evaluator.get_rank_class(evaluate(hole_cards, board))]
 
 
+# This function returns the human-readable name of the best hand.
+# Parameters:
+#   - hole_cards: list of 2 Card objects
+#   - board: list of 3-5 Card objects
+# Returns:
+#   - str: e.g. 'Full House', 'Flush'
 def get_hand_name(hole_cards, board):
     return HAND_NAMES[get_hand_rank(hole_cards, board)]
 
 
+# This function compares two hole card pairs on the same board.
+# Parameters:
+#   - hole_a: list of 2 Card objects (first hand)
+#   - hole_b: list of 2 Card objects (second hand)
+#   - board: list of 3-5 Card objects
+# Returns:
+#   - int: 1 if hole_a wins, -1 if hole_b wins, 0 if tied
 def compare_hands(hole_a, hole_b, board):
     score_a = evaluate(hole_a, board)
     score_b = evaluate(hole_b, board)

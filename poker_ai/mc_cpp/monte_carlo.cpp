@@ -11,8 +11,8 @@ namespace py = pybind11;
 //   rank_idx = card_int >> 2  (0=Two ... 12=Ace)
 //   suit     = card_int  & 3
 
-// ── RNG ──────────────────────────────────────────────────────────────────────
-// xoshiro256++ — 4×uint64 state, faster than mt19937, strong statistical quality
+// This struct implements the xoshiro256++ PRNG. It seeds from system entropy and
+// produces 64-bit values with strong statistical quality and low overhead.
 struct Xoshiro {
     uint64_t s[4];
 
@@ -34,9 +34,7 @@ struct Xoshiro {
     static uint64_t rotl(uint64_t x, int k) { return x << k | x >> (64 - k); }
 };
 
-// ── Eval5 ────────────────────────────────────────────────────────────────────
 // 9-comparator sorting network for 5 elements, descending
-// Replaces std::sort — no function pointers, no branching overhead
 #define CSWAP(a, b) do { if ((a) < (b)) { int _t=(a); (a)=(b); (b)=_t; } } while(0)
 
 static inline void sort5d(int* r) {
@@ -47,6 +45,11 @@ static inline void sort5d(int* r) {
     CSWAP(r[3],r[4]);
 }
 
+// This function evaluates a 5-card hand and returns a comparable score.
+// Parameters:
+//   - c: array of 5 card integers (card_int = rank_idx*4 + suit, rank_idx 0=Two..12=Ace)
+// Returns:
+//   - uint32_t: hand score (higher is better), encoded as class*1000000 + tiebreaker
 static uint32_t eval5(const int* c) {
     int r[5], s[5];
     for (int i = 0; i < 5; i++) { r[i] = c[i] >> 2; s[i] = c[i] & 3; }
@@ -60,13 +63,11 @@ static uint32_t eval5(const int* c) {
     int cnt[13] = {};
     for (int i = 0; i < 5; i++) cnt[r[i]]++;
 
-    // Extract groups high-rank-first so they're already rank-sorted descending
     struct G { int cnt, rank; };
     G g[5]; int ng = 0;
     for (int rk = 12; rk >= 0; rk--)
         if (cnt[rk]) g[ng++] = {cnt[rk], rk};
 
-    // Stable insertion sort by count descending — ng ≤ 5, much cheaper than std::sort
     for (int i = 1; i < ng; i++) {
         G tmp = g[i]; int j = i;
         while (j > 0 && g[j-1].cnt < tmp.cnt) { g[j] = g[j-1]; --j; }
@@ -99,9 +100,7 @@ static uint32_t eval5(const int* c) {
     return cls * 1000000u + tb;
 }
 
-// ── Eval7 ────────────────────────────────────────────────────────────────────
 // Precomputed index sets for all C(7,5) = 21 combinations
-// Avoids the inner conditional loop entirely
 static const uint8_t CHOOSE[21][5] = {
     {2,3,4,5,6}, {1,3,4,5,6}, {1,2,4,5,6}, {1,2,3,5,6}, {1,2,3,4,6}, {1,2,3,4,5},
     {0,3,4,5,6}, {0,2,4,5,6}, {0,2,3,5,6}, {0,2,3,4,6}, {0,2,3,4,5},
@@ -111,6 +110,11 @@ static const uint8_t CHOOSE[21][5] = {
     {0,1,2,3,4},
 };
 
+// This function finds the best 5-card hand from 7 cards by evaluating all C(7,5) = 21 subsets.
+// Parameters:
+//   - cards: array of 7 card integers
+// Returns:
+//   - uint32_t: best eval5 score across all subsets
 static uint32_t eval7(const int* cards) {
     uint32_t best = 0;
     for (int i = 0; i < 21; i++) {
@@ -123,7 +127,14 @@ static uint32_t eval7(const int* cards) {
     return best;
 }
 
-// ── Monte Carlo ───────────────────────────────────────────────────────────────
+// This function runs Monte Carlo equity estimation for a Texas Hold'em hand.
+// Parameters:
+//   - hole: hero's 2 hole cards as card integers
+//   - board: known community cards (0-5 card integers)
+//   - num_opponents: number of active opponents to simulate
+//   - num_sims: number of random runouts to evaluate
+// Returns:
+//   - dict: {'win': float, 'tie': float, 'loss': float} as fractions of total simulations
 py::dict monte_carlo(
     const std::vector<int>& hole,
     const std::vector<int>& board,
@@ -139,20 +150,17 @@ py::dict monte_carlo(
     for (int c = 0; c < 52; c++)
         if (!used[c]) remaining.push_back(c);
 
-    const int board_size  = (int)board.size();
-    const int board_need  = 5 - board_size;
+    const int board_size   = (int)board.size();
+    const int board_need   = 5 - board_size;
     const int cards_needed = board_need + num_opponents * 2;
-    const int n           = (int)remaining.size();
+    const int n            = (int)remaining.size();
 
     Xoshiro rng;
 
-    // Pre-fill the fixed parts of every hand array (hole cards + known board).
-    // Only the runout and opponent hole cards change each simulation.
     int my7[7];
     my7[0] = hole[0]; my7[1] = hole[1];
     for (int i = 0; i < board_size; i++) my7[2 + i] = board[i];
 
-    // opp_base[o][0..6]: board slots pre-filled, hole/runout slots filled per sim
     std::vector<std::array<int,7>> opp_base(num_opponents);
     for (int o = 0; o < num_opponents; o++)
         for (int i = 0; i < board_size; i++)
@@ -162,14 +170,12 @@ py::dict monte_carlo(
     std::vector<int> pool(n);
 
     for (int sim = 0; sim < num_sims; sim++) {
-        // Partial Fisher-Yates: sample cards_needed cards from remaining deck
         std::copy(remaining.begin(), remaining.end(), pool.begin());
         for (int i = 0; i < cards_needed; i++) {
             const int j = i + rng.next() % (uint64_t)(n - i);
             std::swap(pool[i], pool[j]);
         }
 
-        // Fill runout into my7 (positions 2+board_size .. 6)
         for (int i = 0; i < board_need; i++)
             my7[2 + board_size + i] = pool[i];
 
